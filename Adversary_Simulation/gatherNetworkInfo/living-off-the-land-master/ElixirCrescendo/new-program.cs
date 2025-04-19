@@ -1,3 +1,7 @@
+// csc new-program.cs
+// new-program.exe enmu_result.cab
+// Enter you HTTP Post Request IP
+
 using System;
 using System.Diagnostics;
 using System.IO;
