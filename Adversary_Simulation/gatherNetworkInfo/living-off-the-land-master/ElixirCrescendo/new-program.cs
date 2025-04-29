@@ -15,14 +15,11 @@ namespace elixircrescendo
         {
             Console.ForegroundColor = ConsoleColor.DarkRed;
             Console.WriteLine("  *  *  * ElixirCrescendo *  *  *");
-            Console.WriteLine(@"             O*  .");
-            Console.WriteLine(@"               0   *  ");
-            Console.WriteLine(@"              .   o");
-            Console.WriteLine(@"             o   .");
-            Console.WriteLine(@"           _________");
-            Console.WriteLine(@"         c(`       ')o");
-            Console.WriteLine(@"           \.     ,/     ");
-            Console.WriteLine(@"          _//^---^\\_  ");
+            Console.WriteLine(@"      _    ____  _  __");
+            Console.WriteLine(@"     / \  |  _ \| |/ /");
+            Console.WriteLine(@"    / _ \ | |_) | ' / ");
+            Console.WriteLine(@"   / ___ \|  __/| . \ ");
+            Console.WriteLine(@"  /_/   \_\_|   |_|\_\");
             Console.WriteLine("  --CertReq.exe Exfil Wrapper--");
             Console.WriteLine(" ");
             Console.ResetColor();
