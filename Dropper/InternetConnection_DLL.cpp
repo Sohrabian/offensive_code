@@ -53,7 +53,7 @@ extern "C" __declspec(dllexport) BOOL SendHttpRequest()
 
     HINTERNET hConnect = InternetOpenUrl(
         hInternet,
-        L"http://194.48.198.250:2121/api",  // Change to your target URL
+        L"http://192.168.10.10:2121/api",  // Change to your target URL
         NULL,
         0,
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE,
