@@ -1,5 +1,7 @@
 /*
 Replace your DLLName
+
+kali: python3 -m http.server 1010
 */
 
 #include <windows.h>
