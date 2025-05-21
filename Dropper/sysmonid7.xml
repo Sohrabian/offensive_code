@@ -1,0 +1,14 @@
+<Sysmon schemaversion="4.90">
+  <EventFiltering>
+    <!-- Event ID 7: Image Loaded -->
+    <RuleGroup name="T1003.004 - LSASS Memory Dumping via comsvcs.dll" groupRelation="or">
+      <ImageLoad onmatch="include">
+        <Rule name="Rundll32 loading comsvcs.dll for LSASS dump" groupRelation="and">
+          <Image condition="end with">rundll32.exe</Image>
+          <OriginalFileName condition="is">comsvcs.dll</OriginalFileName>
+          <Description>Detects rundll32.exe loading comsvcs.dll, which can be used to dump LSASS memory (T1003.004)</Description>
+        </Rule>
+      </ImageLoad>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>
