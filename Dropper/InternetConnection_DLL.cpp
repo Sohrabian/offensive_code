@@ -15,6 +15,8 @@ Visual Studio Project Setup
         Set to "Not Using Precompiled Headers"
     Linker → Input → Additional Dependencies:
         Add "wininet.lib"
+
+    rundll32 YourDllName.dll,SendHttpRequest
 */
 #include <windows.h>
 #include <wininet.h>
