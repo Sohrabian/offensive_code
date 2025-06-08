@@ -29,5 +29,6 @@ def get_exported_functions(dll_path):
             pe.close()
 
 # Example usage
+# python.exe ./dll-parser.py 
 dll_path = 'cscapi.dll'  # Replace with the path to your DLL file
 get_exported_functions(dll_path)
