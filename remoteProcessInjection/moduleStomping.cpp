@@ -1,3 +1,5 @@
+/*local module stomping - dll hijacking stomping*/
+
 #include <windows.h>
 #include <stdio.h>
 #include <psapi.h>
