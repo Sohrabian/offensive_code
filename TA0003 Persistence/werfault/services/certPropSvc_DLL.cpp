@@ -1,3 +1,18 @@
+/*
+this source code Doesn't work correctly when Stopped the CertPropSvc form :
+sc stop CertPropSvc
+sc start CertPropSvc
+du to, when changed the reg path key " reg query "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\CertPropSvc\Parameters" /s " :
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\CertPropSvc\Parameters
+    ServiceDll    REG_EXPAND_SZ    C:\Windows\System32\certprop.dll
+    ServiceDllUnloadOnStop    REG_DWORD    0x1
+    ServiceMain    REG_SZ    CertPropServiceMain
+
+and Hijack the Service DLL (Service DLL Hijacked) the certprop Doesn't Work Correctly but the Cocomelon malware Works Correctly. 
+"source : https://cocomelonc.github.io/persistence/2025/09/14/malware-pers-28.html"
+
+*/
+
 #include "pch.h"
 #include <winsock2.h>
 #include <windows.h>
