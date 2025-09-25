@@ -1,3 +1,7 @@
+/*
+registry path check: reg query "HKLM\System\CurrentControlSet\Services\WinSock2\Parameters\NameSpace_Catalog5\Catalog_Entries64\000000000007" /s
+*/
+
 #include <windows.h>
 #include <string.h>
 
