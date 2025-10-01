@@ -6,6 +6,14 @@ like using Reflective DLL injection without Write AnyThing on the Disk
 Reflective DLL Injection Source : https://www.youtube.com/watch?v=teWLAUxGmTg
 */
 
+/*
+Right-click on your project in Solution Explorer
+Select Properties
+Go to Configuration Properties > C/C++ > Precompiled Headers
+Set Precompiled Header to "Not Using Precompiled Headers"
+Click Apply and OK
+*/
+
 #include <iostream>
 #include <fstream>
 #include <vector>
