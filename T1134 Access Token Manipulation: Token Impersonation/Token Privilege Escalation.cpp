@@ -1,3 +1,7 @@
+/*
+This source code get the Current Token [example a powershell is running by the administrator] and running a new cmd.exe with the current token.
+*/
+
 #include <windows.h>
 #include <stdio.h>
 #include <iostream>
