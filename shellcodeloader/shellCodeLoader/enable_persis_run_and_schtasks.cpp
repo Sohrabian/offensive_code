@@ -1,4 +1,23 @@
 /*
+for Detection we must Enabled via Powershell : 
+wevtutil sl Microsoft-Windows-TaskScheduler/Operational /e:true
+
+for splunk detection :
+index=windows 
+(sourcetype="WinEventLog:Microsoft-Windows-TaskScheduler/Operational" OR sourcetype="wineventlog:security")
+(EventCode=106 OR EventCode=140 OR EventCode=141 OR EventCode=200 OR EventCode=4688 OR EventCode=4657)
+| eval TaskAction=case(
+    EventCode=106, "Task Created",
+    EventCode=140, "Task Updated", 
+    EventCode=141, "Task Deleted",
+    EventCode=200, "Task Executed",
+    EventCode=4688, "Process Creation",
+    EventCode=4657, "Registry Modification"
+)
+| stats count by _time, host, User, TaskAction, TaskName, CommandLine, ObjectName
+| sort - _time
+
+
 schtasks /query /fo list | findstr "WindowsHealthMonitor"
 reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v WindowsUpdateService
 
