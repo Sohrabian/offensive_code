@@ -28,6 +28,20 @@ persis on RUN Key via normal user
 persis on Schtasks via prvilege user
 */
 
+/*
+flase positive log :
+index=windows sourcetype="wineventlog:security" EventCode=4688
+(CommandLine="*schtasks*" OR CommandLine="*at.exe*" OR ProcessName="schtasks.exe" OR ProcessName="at.exe")
+| search CommandLine="*/create*" OR CommandLine="*create*"
+| table _time, host, User, ParentCommandLine, CommandLine
+
+Registry changes for Scheduled Tasks:
+index=windows sourcetype="wineventlog:security" EventCode=4657
+ObjectName="*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache*"
+| table _time, host, User, ObjectName, ProcessName
+    
+*/
+
 #include <Windows.h>
 #include <winhttp.h>
 #include <vector>
