@@ -1,49 +1,31 @@
 // dllmain.cpp
 #include "pch.h"
 #include <windows.h>
-#include <cstdio>
+#include <cstring>
 
-static DWORD WINAPI PayloadThread(LPVOID)
+static void WriteMarker(const char* path, const char* text)
 {
-    // 1. Write a marker file — this ALWAYS works if the thread runs
-    HANDLE h = CreateFileA(
-        "C:\\Temp\\reflective_payload_ran.txt",
-        GENERIC_WRITE, 0, NULL,
+    HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL,
         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
     if (h != INVALID_HANDLE_VALUE) {
-        const char* msg = "Payload thread executed inside target process.\r\n";
-        DWORD written = 0;
-        WriteFile(h, msg, (DWORD)strlen(msg), &written, NULL);
+        DWORD w = 0;
+        WriteFile(h, text, (DWORD)strlen(text), &w, NULL);
         CloseHandle(h);
     }
-
-    // 2. Also try MessageBox
-    MessageBoxA(NULL, "Payload thread ran!", "Reflective Payload",
-        MB_OK | MB_ICONINFORMATION);
-
-    return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
+BOOL APIENTRY DllMain(HMODULE h, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
-        DisableThreadLibraryCalls(hModule);
+        DisableThreadLibraryCalls(h);
+        WriteMarker("C:\\Temp\\dllmain_entered.txt",
+            "DllMain entered.\r\n");
 
-        // Write a marker that DllMain itself ran
-        HANDLE h = CreateFileA(
-            "C:\\Temp\\dllmain_entered.txt",
-            GENERIC_WRITE, 0, NULL,
-            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (h != INVALID_HANDLE_VALUE) {
-            const char* msg = "DllMain entered with DLL_PROCESS_ATTACH.\r\n";
-            DWORD written = 0;
-            WriteFile(h, msg, (DWORD)strlen(msg), &written, NULL);
-            CloseHandle(h);
+        // Park forever. The thread never returns to the CRT
+        // thread-teardown path, so cmd.exe stays alive.
+        for (;;) {
+            Sleep(60000);
         }
-
-        HANDLE t = CreateThread(NULL, 0, PayloadThread, NULL, 0, NULL);
-        if (t) CloseHandle(t);
     }
     return TRUE;
 }
