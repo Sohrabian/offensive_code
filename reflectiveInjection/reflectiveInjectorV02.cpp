@@ -1,3 +1,13 @@
+/*
+Get-Process cmd -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | Stop-Process -Force       
+Stop-Process -Id 5768 -Force
+Get-Process cmd -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | Stop-Process -Force  
+
+tasklist /m /fi "imagename eq cmd.exe"
+
+Get-Process cmd | Select-Object Id, StartTime | Format-Table
+*/
+
 // injectorReflectiveNew.cpp
 #include <iostream>
 #include <string>
