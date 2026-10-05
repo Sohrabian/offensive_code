@@ -29,11 +29,23 @@ BOOL APIENTRY DllMain(HMODULE h, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(h);
-        WriteMarker("C:\\Temp\\dllmain_entered.txt",
-            "DllMain entered.\r\n");
 
-        // Park forever. The thread never returns to the CRT
-        // thread-teardown path, so cmd.exe stays alive.
+        // 1. Marker that DllMain ran
+        WriteMarker("C:\\Temp\\dllmain_entered.txt",
+            "DllMain entered with DLL_PROCESS_ATTACH.\r\n");
+
+        // 2. Marker that the payload ran
+        WriteMarker("C:\\Temp\\reflective_payload_ran.txt",
+            "Payload executed synchronously inside DllMain.\r\n");
+
+        // 3. Audible proof — Beep is from kernel32.dll, no GUI needed,
+        //    no desktop association required, safe from reflective thread.
+        Beep(1000, 300);   // 1000 Hz for 300 ms
+        Beep(1500, 300);   // second tone to make it distinct
+        Beep(2000, 500);   // third tone, longer
+
+        // 4. Park forever. The thread never returns to the CRT
+        //    thread-teardown path, so cmd.exe stays alive.
         for (;;) {
             Sleep(60000);
         }
