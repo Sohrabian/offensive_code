@@ -15,14 +15,13 @@ typedef struct BASE_RELOCATION_ENTRY {
     USHORT Type   : 4;
 } BASE_RELOCATION_ENTRY, *PBASE_RELOCATION_ENTRY;
 
-// DllMain signature + pointer to the exported function we want to call
 using DLLEntry = BOOL(WINAPI*)(HINSTANCE dll, DWORD reason, LPVOID reserved);
 typedef void (*MyDllMain)();
 
 int main()
 {
     // =====================================================
-    // 1. Load the DLL file from disk into memory
+    // 1. Read DLL from disk — NO HTTP, NO NETWORK
     // =====================================================
     HANDLE dll = CreateFileA(
         "C:\\Temp\\test.dll",
@@ -62,7 +61,7 @@ int main()
     }
 
     // =====================================================
-    // 2. Parse the in-memory DLL headers
+    // 2. Parse PE headers
     // =====================================================
     PIMAGE_DOS_HEADER dosHeaders = (PIMAGE_DOS_HEADER)dllBytes;
     if (dosHeaders->e_magic != IMAGE_DOS_SIGNATURE) {
@@ -87,7 +86,7 @@ int main()
               << dllImageSize << " bytes\n";
 
     // =====================================================
-    // 3. Allocate memory for the mapped image
+    // 3. Allocate mapped image
     // =====================================================
     LPVOID dllBase = VirtualAlloc(
         (LPVOID)ntHeaders->OptionalHeader.ImageBase,
@@ -97,11 +96,9 @@ int main()
 
     if (!dllBase) {
         std::cout << "[*] Preferred base unavailable, allocating elsewhere\n";
-        dllBase = VirtualAlloc(
-            NULL,
-            dllImageSize,
-            MEM_RESERVE | MEM_COMMIT,
-            PAGE_EXECUTE_READWRITE);
+        dllBase = VirtualAlloc(NULL, dllImageSize,
+                               MEM_RESERVE | MEM_COMMIT,
+                               PAGE_EXECUTE_READWRITE);
     }
 
     if (!dllBase) {
@@ -120,28 +117,26 @@ int main()
                                (DWORD_PTR)ntHeaders->OptionalHeader.ImageBase;
 
     // =====================================================
-    // 5. Copy DLL headers into the mapped image
+    // 5. Copy headers
     // =====================================================
     std::memcpy(dllBase, dllBytes, ntHeaders->OptionalHeader.SizeOfHeaders);
 
     // =====================================================
-    // 6. Copy each section into the mapped image
+    // 6. Copy sections
     // =====================================================
     PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(ntHeaders);
     for (size_t i = 0; i < ntHeaders->FileHeader.NumberOfSections; i++) {
         LPVOID sectionDestination = (LPVOID)(
             (DWORD_PTR)dllBase + (DWORD_PTR)section->VirtualAddress);
-
         LPVOID sectionBytes = (LPVOID)(
             (DWORD_PTR)dllBytes + (DWORD_PTR)section->PointerToRawData);
-
         std::memcpy(sectionDestination, sectionBytes, section->SizeOfRawData);
         section++;
     }
     std::cout << "[*] Sections copied\n";
 
     // =====================================================
-    // 7. Apply base relocations
+    // 7. Apply relocations
     // =====================================================
     IMAGE_DATA_DIRECTORY relocations =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
@@ -164,33 +159,26 @@ int main()
 
             for (DWORD i = 0; i < relocCount; i++) {
                 relocationsProcessed += sizeof(BASE_RELOCATION_ENTRY);
-
-                if (relocEntries[i].Type == 0)
-                    continue;
+                if (relocEntries[i].Type == 0) continue;
 
                 DWORD_PTR relocRVA = relocBlock->PageAddress + relocEntries[i].Offset;
                 DWORD_PTR addressToPatch = 0;
 
-                ReadProcessMemory(
-                    GetCurrentProcess(),
-                    (LPCVOID)((DWORD_PTR)dllBase + relocRVA),
-                    &addressToPatch,
-                    sizeof(DWORD_PTR),
-                    NULL);
+                ReadProcessMemory(GetCurrentProcess(),
+                                  (LPCVOID)((DWORD_PTR)dllBase + relocRVA),
+                                  &addressToPatch, sizeof(DWORD_PTR), NULL);
 
                 addressToPatch += deltaImageBase;
 
-                std::memcpy(
-                    (PVOID)((DWORD_PTR)dllBase + relocRVA),
-                    &addressToPatch,
-                    sizeof(DWORD_PTR));
+                std::memcpy((PVOID)((DWORD_PTR)dllBase + relocRVA),
+                            &addressToPatch, sizeof(DWORD_PTR));
             }
         }
         std::cout << "[*] Relocations applied\n";
     }
 
     // =====================================================
-    // 8. Resolve the Import Address Table (IAT)
+    // 8. Resolve imports
     // =====================================================
     IMAGE_DATA_DIRECTORY importsDirectory =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
@@ -215,8 +203,7 @@ int main()
                             (LPCSTR)IMAGE_ORDINAL(thunk->u1.Ordinal);
                         thunk->u1.Function =
                             (DWORD_PTR)GetProcAddress(library, functionOrdinal);
-                    }
-                    else {
+                    } else {
                         PIMAGE_IMPORT_BY_NAME functionName =
                             (PIMAGE_IMPORT_BY_NAME)(
                                 (DWORD_PTR)dllBase + thunk->u1.AddressOfData);
@@ -233,7 +220,7 @@ int main()
     }
 
     // =====================================================
-    // 9. EXECUTE — find the exported function and call it
+    // 9. Execute exported function
     // =====================================================
     IMAGE_DATA_DIRECTORY exportDirInfo =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
