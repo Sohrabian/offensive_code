@@ -5,6 +5,8 @@ Get-Process -Id 6132 | Select-Object Id, ProcessName, StartTime
 tasklist /m /fi "imagename eq cmd.exe"
 or
 tasklist /m /fi "imagename eq cmd.exe" /fo list
+
+.\dumpbin.exe /dependents C:\Users\apk\source\repos\test\x64\Release\test.dll
 */
 
 // dllmain.cpp
