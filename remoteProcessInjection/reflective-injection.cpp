@@ -1,3 +1,5 @@
+//lsecqt
+
 #include <iostream>
 #include <windows.h>
 
