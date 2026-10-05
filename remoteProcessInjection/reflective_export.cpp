@@ -8,20 +8,21 @@
 typedef struct BASE_RELOCATION_BLOCK {
     DWORD PageAddress;
     DWORD BlockSize;
-} BASE_RELOCATION_BLOCK, *PBASE_RELOCATION_BLOCK;
+} BASE_RELOCATION_BLOCK, * PBASE_RELOCATION_BLOCK;
 
 typedef struct BASE_RELOCATION_ENTRY {
     USHORT Offset : 12;
-    USHORT Type   : 4;
-} BASE_RELOCATION_ENTRY, *PBASE_RELOCATION_ENTRY;
+    USHORT Type : 4;
+} BASE_RELOCATION_ENTRY, * PBASE_RELOCATION_ENTRY;
 
+// DllMain signature + pointer to the exported function we want to call
 using DLLEntry = BOOL(WINAPI*)(HINSTANCE dll, DWORD reason, LPVOID reserved);
 typedef void (*MyDllMain)();
 
 int main()
 {
     // =====================================================
-    // 1. Read DLL from disk — NO HTTP, NO NETWORK
+    // 1. Load the DLL file from disk into memory
     // =====================================================
     HANDLE dll = CreateFileA(
         "C:\\Temp\\test.dll",
@@ -61,7 +62,7 @@ int main()
     }
 
     // =====================================================
-    // 2. Parse PE headers
+    // 2. Parse the in-memory DLL headers
     // =====================================================
     PIMAGE_DOS_HEADER dosHeaders = (PIMAGE_DOS_HEADER)dllBytes;
     if (dosHeaders->e_magic != IMAGE_DOS_SIGNATURE) {
@@ -83,10 +84,10 @@ int main()
 
     SIZE_T dllImageSize = ntHeaders->OptionalHeader.SizeOfImage;
     std::cout << "[*] DLL loaded: " << dllSize << " bytes, image size: "
-              << dllImageSize << " bytes\n";
+        << dllImageSize << " bytes\n";
 
     // =====================================================
-    // 3. Allocate mapped image
+    // 3. Allocate memory for the mapped image
     // =====================================================
     LPVOID dllBase = VirtualAlloc(
         (LPVOID)ntHeaders->OptionalHeader.ImageBase,
@@ -96,9 +97,11 @@ int main()
 
     if (!dllBase) {
         std::cout << "[*] Preferred base unavailable, allocating elsewhere\n";
-        dllBase = VirtualAlloc(NULL, dllImageSize,
-                               MEM_RESERVE | MEM_COMMIT,
-                               PAGE_EXECUTE_READWRITE);
+        dllBase = VirtualAlloc(
+            NULL,
+            dllImageSize,
+            MEM_RESERVE | MEM_COMMIT,
+            PAGE_EXECUTE_READWRITE);
     }
 
     if (!dllBase) {
@@ -108,35 +111,37 @@ int main()
         return 1;
     }
     std::cout << "[*] Mapped image at: 0x"
-              << std::hex << (DWORD_PTR)dllBase << std::dec << "\n";
+        << std::hex << (DWORD_PTR)dllBase << std::dec << "\n";
 
     // =====================================================
     // 4. Compute relocation delta
     // =====================================================
     DWORD_PTR deltaImageBase = (DWORD_PTR)dllBase -
-                               (DWORD_PTR)ntHeaders->OptionalHeader.ImageBase;
+        (DWORD_PTR)ntHeaders->OptionalHeader.ImageBase;
 
     // =====================================================
-    // 5. Copy headers
+    // 5. Copy DLL headers into the mapped image
     // =====================================================
     std::memcpy(dllBase, dllBytes, ntHeaders->OptionalHeader.SizeOfHeaders);
 
     // =====================================================
-    // 6. Copy sections
+    // 6. Copy each section into the mapped image
     // =====================================================
     PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(ntHeaders);
     for (size_t i = 0; i < ntHeaders->FileHeader.NumberOfSections; i++) {
         LPVOID sectionDestination = (LPVOID)(
             (DWORD_PTR)dllBase + (DWORD_PTR)section->VirtualAddress);
+
         LPVOID sectionBytes = (LPVOID)(
             (DWORD_PTR)dllBytes + (DWORD_PTR)section->PointerToRawData);
+
         std::memcpy(sectionDestination, sectionBytes, section->SizeOfRawData);
         section++;
     }
     std::cout << "[*] Sections copied\n";
 
     // =====================================================
-    // 7. Apply relocations
+    // 7. Apply base relocations
     // =====================================================
     IMAGE_DATA_DIRECTORY relocations =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
@@ -159,26 +164,33 @@ int main()
 
             for (DWORD i = 0; i < relocCount; i++) {
                 relocationsProcessed += sizeof(BASE_RELOCATION_ENTRY);
-                if (relocEntries[i].Type == 0) continue;
+
+                if (relocEntries[i].Type == 0)
+                    continue;
 
                 DWORD_PTR relocRVA = relocBlock->PageAddress + relocEntries[i].Offset;
                 DWORD_PTR addressToPatch = 0;
 
-                ReadProcessMemory(GetCurrentProcess(),
-                                  (LPCVOID)((DWORD_PTR)dllBase + relocRVA),
-                                  &addressToPatch, sizeof(DWORD_PTR), NULL);
+                ReadProcessMemory(
+                    GetCurrentProcess(),
+                    (LPCVOID)((DWORD_PTR)dllBase + relocRVA),
+                    &addressToPatch,
+                    sizeof(DWORD_PTR),
+                    NULL);
 
                 addressToPatch += deltaImageBase;
 
-                std::memcpy((PVOID)((DWORD_PTR)dllBase + relocRVA),
-                            &addressToPatch, sizeof(DWORD_PTR));
+                std::memcpy(
+                    (PVOID)((DWORD_PTR)dllBase + relocRVA),
+                    &addressToPatch,
+                    sizeof(DWORD_PTR));
             }
         }
         std::cout << "[*] Relocations applied\n";
     }
 
     // =====================================================
-    // 8. Resolve imports
+    // 8. Resolve the Import Address Table (IAT)
     // =====================================================
     IMAGE_DATA_DIRECTORY importsDirectory =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
@@ -203,7 +215,8 @@ int main()
                             (LPCSTR)IMAGE_ORDINAL(thunk->u1.Ordinal);
                         thunk->u1.Function =
                             (DWORD_PTR)GetProcAddress(library, functionOrdinal);
-                    } else {
+                    }
+                    else {
                         PIMAGE_IMPORT_BY_NAME functionName =
                             (PIMAGE_IMPORT_BY_NAME)(
                                 (DWORD_PTR)dllBase + thunk->u1.AddressOfData);
@@ -220,7 +233,7 @@ int main()
     }
 
     // =====================================================
-    // 9. Execute exported function
+    // 9. EXECUTE — find the exported function and call it
     // =====================================================
     IMAGE_DATA_DIRECTORY exportDirInfo =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
@@ -235,8 +248,8 @@ int main()
     PIMAGE_EXPORT_DIRECTORY exportDir = (PIMAGE_EXPORT_DIRECTORY)(
         (BYTE*)dllBase + exportDirInfo.VirtualAddress);
 
-    DWORD* nameRVAs     = (DWORD*)((BYTE*)dllBase + exportDir->AddressOfNames);
-    WORD*  ordinals     = (WORD* )((BYTE*)dllBase + exportDir->AddressOfNameOrdinals);
+    DWORD* nameRVAs = (DWORD*)((BYTE*)dllBase + exportDir->AddressOfNames);
+    WORD* ordinals = (WORD*)((BYTE*)dllBase + exportDir->AddressOfNameOrdinals);
     DWORD* functionRVAs = (DWORD*)((BYTE*)dllBase + exportDir->AddressOfFunctions);
 
     const char* targetName = "MyDllMain";
@@ -249,8 +262,8 @@ int main()
             DWORD funcRVA = functionRVAs[ordinal];
             targetFunc = (MyDllMain)((BYTE*)dllBase + funcRVA);
             std::cout << "[*] Found export '" << targetName
-                      << "' at 0x" << std::hex
-                      << (DWORD_PTR)targetFunc << std::dec << "\n";
+                << "' at 0x" << std::hex
+                << (DWORD_PTR)targetFunc << std::dec << "\n";
             break;
         }
     }
@@ -259,7 +272,8 @@ int main()
         std::cout << "[*] Calling " << targetName << "()...\n";
         targetFunc();
         std::cout << "[+] Function returned\n";
-    } else {
+    }
+    else {
         std::cerr << "[!] Export '" << targetName << "' not found in DLL\n";
         std::cerr << "[!] Run: dumpbin /exports C:\\Temp\\test.dll\n";
     }
