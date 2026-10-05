@@ -16,13 +16,13 @@ typedef struct BASE_RELOCATION_ENTRY {
 } BASE_RELOCATION_ENTRY, *PBASE_RELOCATION_ENTRY;
 
 // DllMain signature + pointer to the exported function we want to call
-using DLLEntry   = BOOL(WINAPI*)(HINSTANCE dll, DWORD reason, LPVOID reserved);
+using DLLEntry = BOOL(WINAPI*)(HINSTANCE dll, DWORD reason, LPVOID reserved);
 typedef void (*MyDllMain)();
 
 int main()
 {
     // =====================================================
-    // 1. Load the DLL file into memory
+    // 1. Load the DLL file from disk into memory
     // =====================================================
     HANDLE dll = CreateFileA(
         "C:\\Temp\\test.dll",
@@ -35,11 +35,12 @@ int main()
 
     if (dll == INVALID_HANDLE_VALUE) {
         std::cerr << "[!] CreateFileA failed. Error: " << GetLastError() << "\n";
+        std::cerr << "[!] Make sure test.dll exists at C:\\Temp\\test.dll\n";
         return 1;
     }
 
     DWORD64 dllSize = GetFileSize(dll, NULL);
-    if (dllSize == INVALID_FILE_SIZE) {
+    if (dllSize == INVALID_FILE_SIZE || dllSize == 0) {
         std::cerr << "[!] GetFileSize failed. Error: " << GetLastError() << "\n";
         CloseHandle(dll);
         return 1;
@@ -94,7 +95,6 @@ int main()
         MEM_RESERVE | MEM_COMMIT,
         PAGE_EXECUTE_READWRITE);
 
-    // Fallback: allocate anywhere if preferred base is unavailable
     if (!dllBase) {
         std::cout << "[*] Preferred base unavailable, allocating elsewhere\n";
         dllBase = VirtualAlloc(
@@ -110,7 +110,8 @@ int main()
         CloseHandle(dll);
         return 1;
     }
-    std::cout << "[*] Mapped image at: 0x" << std::hex << (DWORD_PTR)dllBase << std::dec << "\n";
+    std::cout << "[*] Mapped image at: 0x"
+              << std::hex << (DWORD_PTR)dllBase << std::dec << "\n";
 
     // =====================================================
     // 4. Compute relocation delta
@@ -232,7 +233,7 @@ int main()
     }
 
     // =====================================================
-    // 9. EXECUTE — find exported function and call it
+    // 9. EXECUTE — find the exported function and call it
     // =====================================================
     IMAGE_DATA_DIRECTORY exportDirInfo =
         ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
@@ -261,7 +262,8 @@ int main()
             DWORD funcRVA = functionRVAs[ordinal];
             targetFunc = (MyDllMain)((BYTE*)dllBase + funcRVA);
             std::cout << "[*] Found export '" << targetName
-                      << "' at 0x" << std::hex << (DWORD_PTR)targetFunc << std::dec << "\n";
+                      << "' at 0x" << std::hex
+                      << (DWORD_PTR)targetFunc << std::dec << "\n";
             break;
         }
     }
@@ -272,6 +274,7 @@ int main()
         std::cout << "[+] Function returned\n";
     } else {
         std::cerr << "[!] Export '" << targetName << "' not found in DLL\n";
+        std::cerr << "[!] Run: dumpbin /exports C:\\Temp\\test.dll\n";
     }
 
     // =====================================================
