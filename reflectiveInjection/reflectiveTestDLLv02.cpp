@@ -1,3 +1,12 @@
+/*
+Get-Content C:\Temp\dllmain_entered.txt
+Get-Content C:\Temp\reflective_payload_ran.txt
+Get-Process -Id 6132 | Select-Object Id, ProcessName, StartTime
+tasklist /m /fi "imagename eq cmd.exe"
+or
+tasklist /m /fi "imagename eq cmd.exe" /fo list
+*/
+
 // dllmain.cpp
 #include "pch.h"
 #include <windows.h>
