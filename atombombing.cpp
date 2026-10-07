@@ -4,7 +4,8 @@
 //
 // Compile with MinGW (MSYS2 UCRT64 / MINGW64):
 //   g++ AtomBombing.cpp -o AtomBombing.exe -lntdll -lpsapi -lole32 -luser32 -std=c++17 -O2 -Wall
-//
+//    g++ atombin.cpp -o AtomBombing.exe -lntdll -luser32 -std=c++17 -O2
+
 // FIXES APPLIED:
 // 1. Adds a hidden window to attach to the GUI subsystem. Required on
 //    Windows 11 24H2+, where both GlobalAddAtomW and NtAddAtom are denied
